@@ -1,6 +1,7 @@
 # nRF Cloud Provisioning
 This repository works as tutorial on how to perform the nRF Cloud Preconnect provisioning process.
-You'll learn how to create the required certificates, load them onto the nRF9160 SiP and perform the actual provisioning in a step-by-step guide. You'll also get an understanding of the nRF Cloud API. We will do many steps manually, otherwise use the provided Python script ```device_credentials_installer.py``` to run through this automated.
+You'll learn how to create the required certificates, load them onto the nRF9160 SiP and perform the actual provisioning in a step-by-step guide. You'll also get an understanding of the nRF Cloud API. 
+>Important: We will do many steps manually to understand the process. For further automation and faster handling use the provided Python script ```device_credentials_installer.py``` to run through this automatically.
 
 ## Requirements
 What you'll need:
@@ -111,12 +112,54 @@ Download the [AmazonRootCA1.pem](https://www.amazontrust.com/repository/AmazonRo
 > You should now be set with all three items for the nRF cloud connection. The private key is already stored inside the nRF9160 (see Step 2), means in the following we will only need to upload the Amazon Root CA certificate and the device certificate to the nRF9160.
 
 ### Step 7: Upload the certificates to the nRF9160
-We will need to upload the Amazon Root CA certificate plus the device certificate to the nRF9160. This is done using the ```AT%CMNG``` command. However, the terminal program you are using must be able to also correctly transmit the new line and carriage return control characters of the certificates.
+We will need to upload the Amazon Root CA certificate plus the device certificate to the nRF9160. This is done using the ```AT%CMNG``` command. However, the terminal program you are using must be able to also correctly transmit the carriage return (CR) and new line/line feed (LF) control characters of the certificates.
 
-The command syntax to write the Amazon Root CA certificate to the nRF9160 is:
+Example: The command syntax to write the Amazon Root CA certificate to the nRF9160 is:
 ```
 AT%CMNG=0,16842753,0,"<CA_cert_text>"
 ```
->Important: LTE Link Monitor as terminal program will not correctly format the CR LF endings. Thus, it is required to use the in-built certificate manager when uploading certificates to the nRF9160 using the tool.
+>Important: LTE Link Monitor as terminal program will not correctly format the CR LF endings. Thus, it is required to use the in-built certificate manager when uploading certificates to the nRF9160 using this tool.
+
+1. Use an editor like Notepad++ to view the certificate files (AmazonRootCA1.pem & your \<nRF9160-UUID\>_crt.pem) and copy the content.
+   <img src="https://user-images.githubusercontent.com/86286546/163985387-03f8bd0e-ee53-4977-a90e-ca04504c6168.png" width="398" height="231">
+2. Paste the certificate to the text field of the certificate manager (LTE Link Monitor), the pasted content must include the line breaks!
+   ![image](https://user-images.githubusercontent.com/86286546/163987192-6baa631d-cc0b-468a-9fe2-95c4ce246de6.png)
+3. Perform this for the Amazon Root CA (CA certificate) and the device certificate (paste into "Client certificate"). Ensure the security tag matches ```16842753``` and click on "Update certificates".
+4. You can view and verify the command(s) in the terminal window. You can also check the installed certificates with ```AT%CMNG=1```, it should show 3 entries for sec tag 16842753. You are now all set on the nRF9160.
+
+### Step 8: Create a CSV file for bulk provision
+
+Each CSV row represents a single device for provisioning. The format of the CSV row is as follows: ```deviceId,[subType],[tags],[fwTypes],"certPem"```. Mandatory fields are only the deviceId and the certificate content that must include the double quotes.
+
+1. Create a new / blank csv file. I have used Notepad++ to create a blank file with file ending .csv.
+2. The deviceId parameter to use is <br>a) your nRF9160 UUID or <br> b) when using a Thingy/nRF9160-DK, you must use: nrf-\<IMEI\>
+3. The last parameter represents the certificate, simply copy and paste the certificate content and add double quotes around it.
+4. More information on the other parameters can be found on the [nRF Cloud API documentation](https://api.nrfcloud.com/v1/#operation/ProvisionDevices) website.
+
+A CSV row with all parameters set can look as follows:
+```
+f69c0e45-7f04-4949-8def-bb2215b4223e,my-tracker,tag1|tag2,APP|MODEM,"-----BEGIN CERTIFICATE-----
+MIIB7DCCAZMCFD...Av3CVgjzn5BLS03X7lyf4w==
+-----END CERTIFICATE-----
+"
+```
+
+### Step 9: Upload the CSV file to nRF Cloud
+Lastly, we will have to perform the actual provisioning of the device(s) to nRF Cloud.
+
+- You can upload the created CSV file using the nRF Cloud website and its drag & drop feature (nRF Cloud Website - Device Management - Provisiong Devices).<br>
+- Alternatively, and what we will do is: We will execute an nRF Cloud API call from the command prompt.
+
+We will use the tool ```curl``` to run a HTTP POST request from the command line. Following the documentation this is done by using parameter ```-X POST```. The nRF Cloud API can be reached under: ```https://api.nrfcloud.com/v1```. The POST request needs to include a header specifying the authorization bearer/your nRF cloud API Key and the content type. Each header field can be added using the parameter ```-H <my-header-field>```. The nRF cloud provision endpoint is under ```$API_HOST/devices```. We will add our csv file as binary data to the POST request, as other content types may cause issues.
+
+>You need to specifiy your own API Key and do not share with anyone. I have modified mine for this example.
+
+Example: This results in the final command as shown here: (ensure you are in the directory of your .csv or specifiy the path to it):
+```
+curl -X POST https://api.nrfcloud.com/v1/devices --data-binary @provision.csv -H "Authorization: Bearer 21acfd0d3dc8b65b9f452c003734504a1df74b9f" -H "Content-Type: application/octet-stream"
+```
+
+**You have successfully completed all steps now: The nRF9160 is set up with all required certificates, and the proviosning on nRF Cloud is done. You may use the "Serial LTE Modem" application and its ```AT#XNRFCLOUD``` command to test the connection.**
+
 
 [^1]: You find your API key by logging into your [nRF Cloud account](https://nrfcloud.com/#/account), and clicking in the top right corner on "User Account". The Team Details section will show your API Key.
